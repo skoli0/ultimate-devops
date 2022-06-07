@@ -1,0 +1,107 @@
+version: '3.7'
+
+# networks:
+#   consul-network:
+#     driver: bridge
+
+services: 
+  salt-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.master
+    hostname: salt-master
+    volumes:
+      - ./salt-master/srv:/srv
+    networks:
+      - consul
+
+  salt-minion:
+    privileged: true
+    build:
+      context: .
+      dockerfile: Dockerfile.minion-rhel
+    depends_on:
+      - salt-master
+    networks:
+      - consul
+    deploy:
+      replicas: 3
+
+  consul-server:
+      image: consul:latest
+      hostname: consul
+      # volumes:
+      #   - ./consul/:/etc/consul/
+      ports:
+      - '8300:8300'
+      - '8301:8301'
+      - '8301:8301/udp'
+      - '8500:8500'
+      - '8600:8600/tcp'
+      - '8600:8600/udp'
+      networks:
+        - consul
+      command:
+        - 'agent'
+        - '-server'
+        - '-bootstrap-expect=1'
+        - '-ui'
+        - '-client=0.0.0.0'
+        - '-data-dir=/consul/data'
+      restart: always
+
+  prometheus-server:
+      image: prom/prometheus:latest
+      hostname: prometheus
+      volumes:
+        - ./prometheus/:/etc/prometheus/
+        # - prometheus_data:/prometheus
+      command:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+        - '--web.console.templates=/usr/share/prometheus/consoles'
+      ports:
+        - 9090:9090
+      restart: always
+      networks:
+        - consul
+      depends_on:
+        - consul-server
+
+  grafana:
+      image: grafana/grafana
+      hostname: grafana
+      volumes:
+        - ./grafana/provisioning/:/etc/grafana/provisioning/
+      ports:
+        - 3000:3000
+      networks:
+        - consul
+
+#   consul-server1:
+#     image: consul:latest
+#     container_name: consul-server1
+#     restart: always
+#     volumes:
+#      - ./server1.json:/consul/config/server1.json:ro
+#     networks:
+#       - consul
+#     ports:
+#       - "8500:8500"
+#       - "8600:8600/udp"
+#     command: "agent -bootstrap-expect=3"
+
+#   consul-server2:
+#     image: consul:latest
+#     container_name: consul-server2
+#     restart: always
+#     volumes:
+#      - ./server2.json:/consul/config/server2.json:ro
+#     networks:
+#       - consul
+#     command: "agent -bootstrap-expect=3"
+
+networks:
+  consul:
+    driver: bridge

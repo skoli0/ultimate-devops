@@ -1,0 +1,42 @@
+# FROM centos:centos7
+
+# RUN cd /etc/yum.repos.d/
+# RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+# RUN sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+
+# RUN yum update -y
+# RUN yum upgrade -y
+# RUN yum install sudo wget vim curl procps -y
+# RUN yum install ncurses -y
+# RUN rpm --import https://repo.saltproject.io/py3/redhat/8/x86_64/latest/SALTSTACK-GPG-KEY.pub
+# RUN curl -fsSL https://repo.saltproject.io/py3/redhat/8/x86_64/latest.repo | tee /etc/yum.repos.d/salt.repo
+# RUN yum clean expire-cache
+# RUN yum install salt-master -y
+
+# RUN sed -i '/^failovermethod=/d' /etc/yum.repos.d/*.repo
+# RUN sed -i "s|#auto_accept: False|auto_accept: True|g" /etc/salt/master
+# COPY etc /etc
+# COPY srv /srv
+
+# ENTRYPOINT ["salt-master", "-l", "debug"]
+
+FROM ubuntu:18.04
+
+ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
+RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+RUN apt-get update -y
+RUN apt-get install apt-utils wget gnupg vim curl -y
+RUN wget -q https://repo.saltstack.com/py3/ubuntu/18.04/amd64/latest/SALTSTACK-GPG-KEY.pub && \
+    apt-key add SALTSTACK-GPG-KEY.pub && \
+    rm SALTSTACK-GPG-KEY.pub
+RUN echo "deb http://repo.saltstack.com/py3/ubuntu/18.04/amd64/latest bionic main" > /etc/apt/sources.list.d/saltstack.list
+RUN apt-get update -y && \
+    apt-get install salt-master salt-minion salt-ssh salt-syndic salt-cloud salt-api -y && \
+    apt-get clean all
+
+RUN sed -i "s|#auto_accept: False|auto_accept: True|g" /etc/salt/master
+COPY salt-master/etc /etc
+COPY salt-master/srv /srv
+ENV DOCKER_HOSTNAME=${DOCKER_HOSTNAME:-salt-master}
+
+ENTRYPOINT ["salt-master", "-l", "debug"]
